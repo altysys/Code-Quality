@@ -104,12 +104,13 @@ jobs:
           echo "Detected package manager: $PACKAGE_MANAGER"
   
       - name: Setup Node (if Node project)
+        continue-on-error: true
         if: env.PACKAGE_MANAGER != 'none'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: ${{ env.PACKAGE_MANAGER }}
-          cache-dependency-path: ${{ inputs.frontend_path }}
+          cache-dependency-path: ${{ inputs.lockfile_paths}}
 
       - name: Install dependencies
         if: env.PACKAGE_MANAGER != 'none'
@@ -138,7 +139,6 @@ jobs:
           fi
 
       - name: Build frontend
-        continue-on-error: true
         run: |
           echo "Building frontend..."
           case $PACKAGE_MANAGER in
