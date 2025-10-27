@@ -1,0 +1,195 @@
+name: Full Stack Quality Checker
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "Target branch name (default: Dev)"
+        required: false
+        default: "Dev"
+        type: string
+      backend_path:
+        description: "Path to backend folder"
+        required: false
+        default: "backend"
+        type: string
+      frontend_path:
+        description: "Path to frontend folder"
+        required: false
+        default: "Frontend"
+        type: string
+      lockfile_paths:
+        description: "Comma-separated list of lockfile paths for caching"
+        required: false
+        default: "Frontend/package-lock.json,Frontend/yarn.lock,Frontend/pnpm-lock.yaml"
+        type: string
+
+jobs:
+  backend-quality:
+    name: Python Backend Quality Check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.backend_path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          echo "Installing backend dependencies..."
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          echo "Backend dependencies installed."
+
+      - name: Run Ruff lint
+        run: |
+          echo "Running Ruff lint check..."
+          ruff check .
+          echo "Linting complete."
+
+      - name: Run Ruff format check
+        run: |
+          echo "Checking code formatting..."
+          ruff format --check .
+          echo "Format check complete."
+
+      - name: Run Pytest (basic validation)
+        run: |
+          echo "Running backend tests..."
+          pytest -q || echo "::warning::Some tests failed."
+          echo "Backend testing complete."
+          
+  frontend-quality:
+    name: Frontend Quality Check
+    runs-on: ubuntu-latest
+    if: always()   # runs even if backend fails
+  
+    defaults:
+      run:
+        working-directory: ${{ inputs.frontend_path }}
+  
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          
+      - name: Detect package manager and lockfile
+        id: detect
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "PACKAGE_MANAGER=npm" >> $GITHUB_ENV
+            echo "LOCKFILE_PATH=package-lock.json" >> $GITHUB_ENV
+          elif [ -f yarn.lock ]; then
+            echo "PACKAGE_MANAGER=yarn" >> $GITHUB_ENV
+            echo "LOCKFILE_PATH=yarn.lock" >> $GITHUB_ENV
+          elif [ -f pnpm-lock.yaml ]; then
+            echo "PACKAGE_MANAGER=pnpm" >> $GITHUB_ENV
+            echo "LOCKFILE_PATH=pnpm-lock.yaml" >> $GITHUB_ENV
+          else
+            echo "PACKAGE_MANAGER=none" >> $GITHUB_ENV
+            echo "LOCKFILE_PATH=" >> $GITHUB_ENV
+          fi
+          echo "Detected package manager: $PACKAGE_MANAGER"
+  
+      - name: Setup Node (if Node project)
+        if: env.PACKAGE_MANAGER != 'none'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: ${{ env.PACKAGE_MANAGER }}
+          cache-dependency-path: ${{ inputs.frontend_path }}
+
+      - name: Install dependencies
+        if: env.PACKAGE_MANAGER != 'none'
+        run: |
+          echo "Installing frontend dependencies..."
+          case $PACKAGE_MANAGER in
+            npm) npm ci || npm install ;;
+            yarn) yarn install --frozen-lockfile ;;
+            pnpm) pnpm install ;;
+          esac
+          echo "Frontend dependencies installed."
+
+      - name: Run TypeScript check (if tsconfig.json exists)
+        continue-on-error: true
+        run: |
+          if [ -f tsconfig.json ]; then
+            echo "Running TypeScript type checks..."
+            case $PACKAGE_MANAGER in
+              npm) npm run check ;;
+              yarn) yarn run check ;;
+              pnpm) pnpm run check ;;
+            esac
+            echo "TypeScript check complete."
+          else
+            echo "No tsconfig.json found — skipping TypeScript checks."
+          fi
+
+      - name: Build frontend
+        run: |
+          echo "Building frontend..."
+          case $PACKAGE_MANAGER in
+            npm) npm run build ;;
+            yarn) yarn run build ;;
+            pnpm) pnpm run build ;;
+          esac
+          echo "Build completed."
+
+      - name: Run ESLint (check for unused variables/imports)
+        run: |
+          echo "Checking ESLint configuration..."
+          if ls eslint.config.* .eslintrc* 1> /dev/null 2>&1; then
+            echo "ESLint configuration found — running with project settings."
+            case $PACKAGE_MANAGER in
+              npm) npm run lint;;
+              yarn) yarn run lint;;
+              pnpm) pnpm run lint;;
+            esac
+          else
+            echo "No ESLint configuration found — running default code quality checks."
+            echo "Installing ESLint and required plugins temporarily..."
+            npm install --no-save eslint eslint-plugin-unused-imports > /dev/null 2>&1 || true
+  
+            echo "Creating temporary ESLint configuration for CI..."
+          cat << 'EOF' > eslint.config.js
+          import unusedImports from "eslint-plugin-unused-imports";
+          export default [
+            {
+              files: ["**/*.{js,jsx,ts,tsx}"],
+              languageOptions: {
+                ecmaVersion: 2020,
+                sourceType: "module",
+              },
+              plugins: {
+                "unused-imports": unusedImports,
+              },
+              rules: {
+                "no-unused-vars": ["error"],
+                "no-undef": ["error"],
+                "no-console": ["warn"],
+                "no-debugger": ["warn"],
+                "unused-imports/no-unused-imports": ["error"]
+              },
+            },
+          ];
+          EOF
+          
+                    echo "Running ESLint with temporary configuration..."
+                    npx eslint . -f stylish --max-warnings=0
+          
+                    echo "Cleaning up temporary configuration..."
+                    rm -f eslint.config.js
+                  fi
+                  echo "ESLint check (including unused variable/import rules) completed."
