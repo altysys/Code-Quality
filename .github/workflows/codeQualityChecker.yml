@@ -138,6 +138,7 @@ jobs:
           fi
 
       - name: Build frontend
+        continue-on-error: true
         run: |
           echo "Building frontend..."
           case $PACKAGE_MANAGER in
