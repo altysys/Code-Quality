@@ -69,7 +69,7 @@ jobs:
 | `branch`         | Target branch for code checks                 | `"Dev"`      |
 | `backend_path`   | Path to backend project folder                | `"backend"`  |
 | `frontend_path`  | Path to frontend project folder               | `"Frontend"` |
-| `lockfile_paths` | Path(s) to lockfiles for caching dependencies | N/A          |
+| `lockfile_paths` | Path(s) to lockfiles for caching dependencies |Frontend/package-lock.json        |
 
 ### 3. Supported Package Managers
 
