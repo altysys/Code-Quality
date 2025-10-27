@@ -1,7 +1,3 @@
-Here’s a professional README draft for your `Code-Quality` repository:
-
----
-
 # Code-Quality
 
 Sharing Code Quality Best Practices
@@ -100,7 +96,3 @@ jobs:
 ## License
 
 This repository is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-I can also draft a **shorter “quick start” README** specifically for developers who just want to plug this workflow into their repo. Do you want me to do that?
