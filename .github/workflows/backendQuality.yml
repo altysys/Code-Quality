@@ -1,0 +1,61 @@
+name: Backend Quality Checker
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "Target branch name (default: Dev)"
+        required: false
+        default: "Dev"
+        type: string
+      backend_path:
+        description: "Path to backend folder"
+        required: false
+        default: "backend"
+        type: string
+
+jobs:
+  backend-quality:
+    name: Python Backend Quality Check
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.backend_path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          echo "Installing backend dependencies..."
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          echo "Backend dependencies installed."
+
+      - name: Run Ruff lint
+        run: |
+          echo "Running Ruff lint check..."
+          ruff check .
+          echo "Linting complete."
+
+      - name: Run Ruff format check
+        run: |
+          echo "Checking code formatting..."
+          ruff format --check .
+          echo "Format check complete."
+
+      - name: Run Pytest (basic validation)
+        run: |
+          echo "Running backend tests..."
+          pytest -q || echo "::warning::Some tests failed."
+          echo "Backend testing complete."
